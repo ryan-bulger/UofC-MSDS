@@ -1,0 +1,191 @@
+---
+title: "Investigating John Hopkins University Covid-19 Data"
+subtitle: "DTSA 5301, University of Colorado"
+date: "April 1st, 2022"
+#output: html_document
+output: pdf_document
+---
+```{r Setup markdown document, echo = FALSE}
+pacman::p_load(tidyverse, lubridate, knitr, formatR, scales)
+knitr::opts_chunk$set(echo = TRUE,  results='hide', warning=FALSE, message=FALSE, tidy.opts = list(width.cutoff=60), tidy=TRUE)
+```
+
+## OBJECTIVE
+Analyze the worldwide rates of Covid-19 cases that resulted in deaths.
+
+---
+
+## DATA IMPORT & TIDYING
+### Importing Data:
+Data for the number of Covid-19 cases and deaths are collected from the John Hopkins University Git-Hub account and each transformed into their own respective data frames.
+```{r Import data frames}
+url_path <- 'https://raw.githubusercontent.com/'
+git_path <- 'CSSEGISandData/COVID-19/master/csse_covid_19_data/'
+
+cases <- 'csse_covid_19_time_series/time_series_covid19_confirmed_global.csv'
+deaths <- 'csse_covid_19_time_series/time_series_covid19_deaths_global.csv'
+
+cases <- read_csv(paste(url_path, git_path, cases, sep=''))
+deaths <- read_csv(paste(url_path, git_path, deaths, sep=''))
+```
+### Tidying Data:
+These two data frames are then joined together based on the common dates for cases and deaths, as well as the common countries between the data frames.  The latitude and longitude data is dropped from the data frame as it's not required for the analysis of rates of death due to Covid-19.
+``` {r Tidying data frames}
+cases <- cases %>%
+  select(-c('Lat','Long')) %>%
+  pivot_longer(cols = -c('Province/State', 'Country/Region'), names_to = 'Date', values_to = 'Cases') %>%
+  mutate(Date = mdy(Date)) %>%
+  group_by(`Country/Region`, Date) %>%
+  summarise(Cases = sum(Cases)) %>%
+  ungroup()
+
+deaths <- deaths %>%
+  select(-c('Lat','Long')) %>%
+  pivot_longer(cols = -c('Province/State', 'Country/Region'), names_to = 'Date', values_to = 'Deaths') %>%
+  mutate(Date = mdy(Date)) %>%
+  group_by(`Country/Region`, Date) %>%
+  summarise(Deaths = sum(Deaths)) %>%
+  ungroup()
+
+covid <- list(cases, deaths) %>%
+  reduce(left_join, by = c('Country/Region', 'Date'))
+```
+### Data Summary:
+The now tidied Covid data frame indicates that there four columns of features, and nearly 160,000 rows of data.
+``` {r View data frame, results='hold'}
+glimpse(covid)
+```
+
+>  (**Note:**
+>  The John Hopkins University Covid-19 data set has new data added daily.  There may be the possibility that there are greater than 160,000 rows of data depending on when the code in this report is run.  Because the data set is dynamic it may have an effect on the data analysis results as stated in this report.  All rates as indicated throughout this report are based on data up to April 1st, 2022 )
+
+---
+
+## DATA ANALYSIS
+### Global Death Rate:
+To begin the analysis it would be interesting to determine what the total worldwide death rate is for all Covid-19 cases, where the death rate is defined as:
+$$\textrm{Death Rate} = \frac{\textrm{Total Deaths}}{\textrm{Total Cases}}$$
+``` {r death rate table, results='hold'}
+# Table detailing the average worldwide death rate
+death_rate <- covid %>%
+  group_by(`Country/Region`) %>%
+  summarise(Cases = max(Cases), Deaths = max(Deaths)) %>%
+  summarise('Total Cases' = sum(Cases), 'Total Deaths' = sum(Deaths)) %>%
+  mutate('Death Rate' = `Total Deaths`/`Total Cases`)
+
+death_rate %>%
+  knitr::kable(digits = 4, format.args = list(big.mark = ",",scientific = FALSE))
+```
+
+### Distribution of Death Rates:
+The above table shows that, on average, of all the Covid-19 cases contracted worldwide only 1.26% of those cases resulted in a death.  Knowing the global death rate is 1.26%, it would be important to understand how this rate varies by country, throughout the world.  To begin investigating this we will look at how the death rates are distributed:
+``` {r death rate distribution, fig.width=6,fig.height=3, results='hold'}
+# Histogram of death rates
+covid %>%
+  group_by(`Country/Region`) %>%
+  summarise(Cases = max(Cases), Deaths = max(Deaths)) %>%
+  mutate(`Death Rate` = Deaths/Cases) %>%
+  ggplot(aes(x=`Death Rate`)) +  
+  geom_histogram(binwidth = 0.0025) +
+  geom_vline(aes(xintercept=death_rate[[3]]),color='green4',size=0.75) +
+  geom_text(aes(x=0.06, 
+                y=20,
+                label=paste('Average Death Rate=',format(death_rate[[3]],digits=3))),
+            color='green4') +
+  ggtitle("Distribution of Covid-19 Rates of Death") +
+  labs(y='Count of Countries') +
+  theme(plot.title = element_text(size = 12))
+```
+
+### Countries with Well Above Average Death Rates:
+The majority of death rates worldwide are below approximately 4.0%, as shown in the plot above.  The next step is to remove the countries below the 4.0% threshold from the analysis, in order to study the countries which are above this threshold.  A table of the countries with death rates above 4.0% is presented below:
+``` {r outlier death rates, results='hold'}
+# Data frame of outlier countries with death rates above 4%
+high_death_rate <- covid %>%
+  group_by(`Country/Region`) %>%
+  summarise(Cases = sum(max(Cases)), Deaths = sum(max(Deaths))) %>%
+  mutate('Death Rate' = Deaths/Cases) %>%
+  filter(`Death Rate` >= 0.04) %>%
+  arrange(desc(`Death Rate`))
+
+# Table of outlier death rates
+high_death_rate %>%
+  knitr::kable(digits = 3, format.args = list(big.mark = ",",scientific = FALSE))
+```
+
+The highest death rate in this table is for the "MS Zaandam", which is a cruise ship, at 22.2%.  Nine of the passengers caught Covid-19 while on board, with two of those passengers passing away from the virus.  The ship was at sea while the passengers contracted the virus, so none of these cases or deaths can be assigned to any country in particular.  Due to this fact, this data is removed from the data frame and the analysis continued focusing on these remaining countries:
+``` {r remove cruiseship, results='hold'}
+# Filtering out the MS Zaandam data
+high_death_rate <- high_death_rate %>%
+  filter(`Country/Region`!="MS Zaandam")
+# List of remaining outlier countries
+high_death_rate[['Country/Region']]
+```
+
+### Trends of Covid-19 Cases:
+A chart of the trend of Covid-19 cases is shown below, analyzing only the countries with death rates above 4.0%.  These trends of cases indicate that Mexico and Peru have been heavily impacted by the Covid-19 virus with each country experiencing multiple "waves" of cases.
+``` {r outlier cases chart, fig.width=6,fig.height=4, results='hold'}
+covid %>%
+  group_by(`Country/Region`) %>%
+  filter(`Country/Region` %in% high_death_rate[['Country/Region']]) %>%
+  mutate(daily_cases = Cases - lag(Cases),
+         daily_deaths = Deaths - lag(Deaths)) %>%
+  drop_na() %>%
+  mutate(Date = floor_date(ymd(Date),"month")) %>%
+  group_by(`Country/Region`,Date) %>%
+  summarise(Cases=mean(daily_cases), Deaths = mean(daily_deaths)) %>%
+  arrange(`Country/Region`,Date) %>%
+  ggplot(aes(x=Date,y=Cases,color=`Country/Region`)) +
+  geom_smooth(span = 0.15,se=FALSE) +
+  expand_limits(y = 0) +
+  ggtitle("Trends of Covid-19 Cases for Countries with a Death Rate > 4.0%") +
+  labs(y="Number of Covid-19 Cases") +
+  theme(plot.title = element_text(size = 12),
+        legend.position="bottom",
+        legend.key.size = unit(3,'mm'),
+        legend.text = element_text(size=8)) +
+  scale_y_continuous(labels=comma) +
+  scale_color_brewer(palette="Set3")
+```
+
+### Trends of Covid-19 Deaths:
+Corresponding to the amount of cases in Mexico and Peru, these countries also experienced a significant amount of deaths due to Covid-19 virus infections.  It is encouraging that despite the large increase in the amount of cases over the last few months of data, the relative amount of deaths has decreased.
+``` {r outlier deaths chart, fig.width=6,fig.height=4, results='hold'}
+covid %>%
+  group_by(`Country/Region`) %>%
+  filter(`Country/Region` %in% high_death_rate[['Country/Region']]) %>%
+  mutate(daily_cases = Cases - lag(Cases),
+         daily_deaths = Deaths - lag(Deaths)) %>%
+  drop_na() %>%
+  mutate(Date = floor_date(ymd(Date),"month")) %>%
+  group_by(`Country/Region`,Date) %>%
+  summarise(Cases=mean(daily_cases), Deaths = mean(daily_deaths)) %>%
+  arrange(`Country/Region`,Date) %>%
+  ggplot(aes(x=Date,y=Deaths,color=`Country/Region`)) +
+  geom_smooth(span = 0.15,se=FALSE) +
+  expand_limits(y = 0) +
+  ggtitle("Trends of Covid-19 Deaths for Countries with a Death Rate > 4.0%") +
+  labs(y="Number of Covid-19 Deaths") +
+  theme(plot.title = element_text(size = 12),
+        legend.position="bottom",
+        legend.key.size = unit(3,'mm'),
+        legend.text = element_text(size=8)) +
+  scale_color_brewer(palette="Set3")
+```
+
+## SOURCES OF BIAS:
+The first possible bias would be to assume that only the poorest countries in the world have death rates above 4.0% because a lack of affordability of Covid-19 vaccines for those countries.  Another bias would be to presume that the decrease in the rate of deaths over time in countries with death rates above 4.0%, despite an increase in cases, would be due to the implementation of vaccines in these countries.
+
+Both of these biases cannot be proven unless relative financial indicators, such as GDP data, and vaccine distribution data sets are also included in this analysis.
+
+---
+
+## CONCLUSION
+It has been shown that the worldwide average death rate due to Covid-19 infections is currently equal to 1.26% of all cases reported.  There are a number of outlier countries that are well above this rate, but further analysis is required to understand why Covid-19 has had a greater impact on these outlier countries when compared to countries with lower rates of deaths.
+
+---
+
+## R SESSION INFORMATION:
+```{r, results='hold', echo=FALSE}
+sessioninfo::package_info(pkgs = 'attached')
+```

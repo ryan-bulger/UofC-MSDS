@@ -18,12 +18,9 @@ The objective of this analysis is to determine the demographics of when and wher
 
 ### DATA IMPORT:
 The first step will be to import the shootings data from the City of New York website.  A summary is run to determine the initial size of the imported data frame and the type of data in each column.  This is done to determine if it is required to change the data types of any columns in the data frame after it has been imported.  The data summary indicates that the data frame has 23,585 rows and 19 columns, and that a few of the columns are of the data class "character".
+
 ```{r Import Data}
 #Import historical shootings data from the City of New York website
-```
-
-
-```{r Import Data}
 url <- "https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv"
 data_import <- read_csv(url)
 ```
@@ -121,7 +118,7 @@ shootings %>%
 
 ## CONCLUSION
 
-In summary it has been shown that the majority of shootings have occured between Black people who are under the age or 45 in the boroughs of the Bronx, Brooklyn, and Manhattan.  Further analysis is required to understand the dynamics between perpetrators and their victims. In particular it would be important to understand why there is such a high rate of Black on Black shootings and how the location and time of day are factors in these crimes.
+In summary it has been shown that the majority of shootings have occurred between Black people who are under the age or 45 in the boroughs of the Bronx, Brooklyn, and Manhattan.  Further analysis is required to understand the dynamics between perpetrators and their victims. In particular it would be important to understand why there is such a high rate of Black on Black shootings and how the location and time of day are factors in these crimes.
 
 ---
 

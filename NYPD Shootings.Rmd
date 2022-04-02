@@ -10,7 +10,7 @@ pacman::p_load(tidyverse, lubridate, knitr)
 knitr::opts_chunk$set(echo = TRUE,  results='hide', warning=FALSE, message=FALSE)
 ```
 ## OBJECTIVE
-The objective of this analysis is to determine the demographics of when and where historical shootings in the City of New York using data from the New York Police Department, evaluated over a 15 year period from January 1st, 2006 to December 29th, 2020.  Throughout the analysis any sources of bias such as age or race will be identified and objectively evaluated to ensure a fair, balanced, and inclusive summary has been generated.
+The objective of this analysis is to determine the demographics of when and where historical shootings have occurred in the City of New York using data from the New York Police Department, evaluated over a 15 year period from January 1st, 2006 to December 29th, 2020.  Throughout the analysis any sources of bias such as age or race will be identified and objectively evaluated to ensure a fair, balanced, and inclusive summary has been generated.
 
 ---
 
